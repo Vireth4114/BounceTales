@@ -2032,7 +2032,9 @@ public final class GameRuntime extends GameCanvas implements Runnable, CommandLi
 			keyQueueSize = 0;
 			buttonsHeld = buttonsDown | buttonsHit;
 			buttonsHit = 0;
-			for (int updateRes = mBounceGame.update(0); updateRes != 0; updateRes = mBounceGame.update(updateRes)) {
+			int updateRes = mBounceGame.update(0);
+			while (updateRes != 0) {
+				updateRes = mBounceGame.update(updateRes);
 			}
 			if (isGameLoading()) {
 				return;

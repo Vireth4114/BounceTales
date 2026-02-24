@@ -149,16 +149,16 @@ public final class BounceObject extends GameObject {
 	//State - collision
 	private int collPointCount; //renamed from: t
 
-	private final boolean[] f41a = new boolean[MAX_COLLISION_POINTS]; //renamed from: a
+	private final boolean[] resultByCollpoint = new boolean[MAX_COLLISION_POINTS]; //renamed from: a
 
 	private final int[] collPointsX = new int[MAX_COLLISION_POINTS]; //renamed from: j
 	private final int[] collPointsY = new int[MAX_COLLISION_POINTS]; //renamed from: k
 
-	private final int[] f65l = new int[MAX_COLLISION_POINTS]; //renamed from: l
-	private final int[] f66m = new int[MAX_COLLISION_POINTS]; //renamed from: m
+	private final int[] pushVectorX = new int[MAX_COLLISION_POINTS]; //renamed from: l
+	private final int[] pushVectorY = new int[MAX_COLLISION_POINTS]; //renamed from: m
 
-	private final int[] f68n = new int[MAX_COLLISION_POINTS]; //renamed from: n
-	private final int[] f70o = new int[MAX_COLLISION_POINTS]; //renamed from: o
+	private final int[] deltaCollPointsX = new int[MAX_COLLISION_POINTS]; //renamed from: n
+	private final int[] deltaCollPointsY = new int[MAX_COLLISION_POINTS]; //renamed from: o
 
 	//State - Super Bounce
 	private int superBounceParticleTimer = 0; //renamed from: r
@@ -218,6 +218,7 @@ public final class BounceObject extends GameObject {
 	/* renamed from: a */
 	//@Override
 	public final void checkCollisions(GameObject startNode) {
+		System.out.println("[" + System.currentTimeMillis() + "] checking collisions for object " + this.getObjectId() + " with update delta " + GameRuntime.updateDelta);
 		int higherX;
 		int lowerX;
 		int higherY;
@@ -226,14 +227,15 @@ public final class BounceObject extends GameObject {
 		int xmin;
 		int ymax;
 		int ymin;
-		int i9;
+		int cosMove;
 		boolean z;
 		for (int i10 = 2; i10 < 10; i10++) {
 			this.collPointCount = 0;
-			int ballDiameter = BALL_DIMENS[this.ballForme] << 16;
-			int ballDiameterSquared = (BALL_DIMENS[this.ballForme] * BALL_DIMENS[this.ballForme]) << 16;
+			int ballRadius = BALL_DIMENS[this.ballForme] << 16;
+			int ballRadiusSquared = (BALL_DIMENS[this.ballForme] * BALL_DIMENS[this.ballForme]) << 16;
 			int xChange = this.localObjectMatrix.translationX - this.renderCalcMatrix.translationX;
 			int yChange = this.localObjectMatrix.translationY - this.renderCalcMatrix.translationY;
+			System.out.println("[" + System.currentTimeMillis() + "] player at: " + LP32.LP32ToFP32(this.renderCalcMatrix.translationX) + "," + LP32.LP32ToFP32(this.renderCalcMatrix.translationY) + " is going to " + LP32.LP32ToFP32(this.localObjectMatrix.translationX) + "," + LP32.LP32ToFP32(this.localObjectMatrix.translationY) + " with velocity " + LP32.LP32ToFP32(xChange) + "," + LP32.LP32ToFP32(yChange));
 			GameObject other = startNode;
 			while (other != null) {
 				other.inverseRenderCalcMatrix.mulVector(this.renderCalcMatrix.translationX, this.renderCalcMatrix.translationY);
@@ -259,23 +261,22 @@ public final class BounceObject extends GameObject {
 					higherY = newYRelToOther;
 					lowerY = yRelToOther;
 				}
-				int collAABBMinX = lowerX - ballDiameter;
-				int collAABBMinY = lowerY - ballDiameter;
-				int collAABBMaxX = higherX + ballDiameter;
-				int collAABBMaxY = higherY + ballDiameter;
+				int collAABBMinX = lowerX - ballRadius;
+				int collAABBMinY = lowerY - ballRadius;
+				int collAABBMaxX = higherX + ballRadius;
+				int collAABBMaxY = higherY + ballRadius;
 				if (!aabbIntersects(other.allBBoxMinX, other.allBBoxMinY, other.allBBoxMaxX, other.allBBoxMaxY, collAABBMinX, collAABBMinY, collAABBMaxX, collAABBMaxY)) {
 					other = other.getNextNode(startNode);
 				} else if ((other.flags & FLAG_NOCOLLIDE) == 0) {
-					//System.out.println("checkcoll me " + getObjectId() + " other " + other.getObjectId() + " isplayer " + isPlayer + " mybbox " + collAABBMinX + "/" + collAABBMaxX + "/" + collAABBMinY + "/" + collAABBMaxY);
 					switch (other.getObjType()) {
 						case GeometryObject.TYPEID:
 							GeometryObject geom = (GeometryObject) other;
 							boolean z2 = false;
-							int i24 = 0;
-							int i25 = 0;
-							int i26 = 0;
+							int moveX = 0;
+							int moveY = 0;
+							int moveLength = 0;
 							int i27 = 0;
-							int i28 = 0;
+							int sinMove = 0;
 							int vertCount = geom.getVertexCount() - 1;
 							for (int vertIdx = 0; vertIdx < vertCount; vertIdx++) {
 								int x1 = geom.xCoordBuffer[vertIdx];
@@ -297,46 +298,61 @@ public final class BounceObject extends GameObject {
 									ymin = y1;
 								}
 								if (aabbIntersects(xmin, ymin, xmax, ymax, collAABBMinX, collAABBMinY, collAABBMaxX, collAABBMaxY)) {
+									System.out.println("possibly colliding line " + vertIdx + " of object " + geom.getObjectId());
 									if (!z2) {
 										z = true;
-										i24 = newXRelToOther - xRelToOther;
-										i25 = newYRelToOther - yRelToOther;
-										i26 = (int) Math.sqrt((double) ((((long) i24) * ((long) i24)) + (((long) i25) * ((long) i25))));
-										if (i26 != 0) {
-											i9 = (int) ((((long) i24) << 16) / ((long) i26));
-											i28 = (int) ((((long) i25) << 16) / ((long) i26));
+										moveX = newXRelToOther - xRelToOther;
+										moveY = newYRelToOther - yRelToOther;
+										moveLength = (int) Math.sqrt((double) ((((long) moveX) * ((long) moveX)) + (((long) moveY) * ((long) moveY))));
+										if (moveLength != 0) {
+											cosMove = (int) ((((long) moveX) << 16) / ((long) moveLength));
+											sinMove = (int) ((((long) moveY) << 16) / ((long) moveLength));
 										} else {
-											i9 = i27;
+											cosMove = i27;
 										}
 									} else {
-										i9 = i27;
+										cosMove = i27;
 										z = z2;
 									}
+									// Calculating normal vector counterclockwise to the line
 									int lineYDim = y1 - y2;
 									int lineXDimNeg = -(x1 - x2);
-									int sqrt = (int) Math.sqrt((double) ((((long) lineYDim) * ((long) lineYDim)) + (((long) lineXDimNeg) * ((long) lineXDimNeg))));
-									int i37 = (int) (((((long) lineYDim) * ((long) BALL_DIMENS[this.ballForme])) << 16) / ((long) sqrt));
-									int i38 = (int) (((((long) lineXDimNeg) * ((long) BALL_DIMENS[this.ballForme])) << 16) / ((long) sqrt));
-									int i39 = x1 + i37;
-									int i40 = y1 + i38;
-									int i41 = x2 + i37;
-									int i42 = y2 + i38;
-									if ((((long) i24) * ((long) lineYDim)) + (((long) i25) * ((long) lineXDimNeg)) < 0) {
-										if (aabbIntersectRay(xRelToOther, yRelToOther, i24, i25, i39, i40, i41, i42, ballDiameterSquared)) {
+									int polygonLineLength = (int) Math.sqrt((double) ((((long) lineYDim) * ((long) lineYDim)) + (((long) lineXDimNeg) * ((long) lineXDimNeg))));
+									int ballRadiusSizedNormalVectorX = (int) (((((long) lineYDim) * ((long) BALL_DIMENS[this.ballForme])) << 16) / ((long) polygonLineLength));
+									int ballRadiusSizedNormalVectorY = (int) (((((long) lineXDimNeg) * ((long) BALL_DIMENS[this.ballForme])) << 16) / ((long) polygonLineLength));
+									int radiusFromX1 = x1 + ballRadiusSizedNormalVectorX;
+									int radiusFromY1 = y1 + ballRadiusSizedNormalVectorY;
+									int radiusFromX2 = x2 + ballRadiusSizedNormalVectorX;
+									int radiusFromY2 = y2 + ballRadiusSizedNormalVectorY;
+									if ((((long) moveX) * ((long) lineYDim)) + (((long) moveY) * ((long) lineXDimNeg)) < 0) {
+										if (vectorIntersectLine(xRelToOther, yRelToOther, moveX, moveY, radiusFromX1, radiusFromY1, radiusFromX2, radiusFromY2, ballRadiusSquared)) {
+											System.out.println("line collision with object " + geom.getObjectId() + " line " + vertIdx + " resulting weight " + LP32.LP32ToFP32(aabbRayWeight) + " at point " + LP32.LP32ToFP32(aabbRayX) + "," + LP32.LP32ToFP32(aabbRayY) + ", result: " + aabbRayResult);
+											System.out.println(
+												"xRelToOther: " + LP32.LP32ToFP32(xRelToOther) +
+												", yRelToOther: " + LP32.LP32ToFP32(yRelToOther) +
+												", moveX: " + LP32.LP32ToFP32(moveX) +
+												", moveY: " + LP32.LP32ToFP32(moveY) +
+												", radiusFromX1: " + LP32.LP32ToFP32(radiusFromX1) +
+												", radiusFromY1: " + LP32.LP32ToFP32(radiusFromY1) +
+												", radiusFromX2: " + LP32.LP32ToFP32(radiusFromX2) +
+												", radiusFromY2: " + LP32.LP32ToFP32(radiusFromY2)
+											);
 											registCollPoint(geom, aabbRayWeight, xChange, yChange, lineYDim, lineXDimNeg, aabbRayResult);
 										}
-										if (m9c(xRelToOther, yRelToOther, i9, i28, i26, x1, y1, BALL_DIMENS[this.ballForme])) {
+										if (finiteRayIntersectsCircle(xRelToOther, yRelToOther, cosMove, sinMove, moveLength, x1, y1, BALL_DIMENS[this.ballForme])) {
+											System.out.println("firstcorner collision with object " + geom.getObjectId() + " line " + vertIdx + " resulting weight " + LP32.LP32ToFP32(aabbRayWeight) + " at point " + LP32.LP32ToFP32(aabbRayX) + "," + LP32.LP32ToFP32(aabbRayY) + ", result: " + aabbRayResult);
 											registCollPoint(geom, aabbRayWeight, xChange, yChange, aabbRayX - x1, aabbRayY - y1, aabbRayResult);
 										}
-										if (m9c(xRelToOther, yRelToOther, i9, i28, i26, x2, y2, BALL_DIMENS[this.ballForme])) {
+										if (finiteRayIntersectsCircle(xRelToOther, yRelToOther, cosMove, sinMove, moveLength, x2, y2, BALL_DIMENS[this.ballForme])) {
+											System.out.println("secondcorner collision with object " + geom.getObjectId() + " line " + vertIdx + " resulting weight " + LP32.LP32ToFP32(aabbRayWeight) + " at point " + LP32.LP32ToFP32(aabbRayX) + "," + LP32.LP32ToFP32(aabbRayY) + ", result: " + aabbRayResult);
 											registCollPoint(geom, aabbRayWeight, xChange, yChange, aabbRayX - x2, aabbRayY - y2, aabbRayResult);
 										}
 									}
 								} else {
-									i9 = i27;
+									cosMove = i27;
 									z = z2;
 								}
-								i27 = i9;
+								i27 = cosMove;
 								z2 = z;
 							}
 							other = other.getNextNodeDescendToChildren(startNode);
@@ -353,11 +369,11 @@ public final class BounceObject extends GameObject {
 						{
 							WaterObject water = (WaterObject) other;
 							int waterMinX = water.areaMinX << 16;
-							if (aabbIntersectRay(waterMinX, water.areaMinY << 16, (water.areaMaxX << 16) - waterMinX, 0, xRelToOther, yRelToOther, newXRelToOther, newYRelToOther, 0)) {
+							if (vectorIntersectLine(waterMinX, water.areaMinY << 16, (water.areaMaxX << 16) - waterMinX, 0, xRelToOther, yRelToOther, newXRelToOther, newYRelToOther, 0)) {
 								water.onBounceSurfaceContact(aabbRayWeight, this.curYVelocity, BALL_DIMENS[this.ballForme], this);
 							}
-							if (newYRelToOther - ballDiameter < water.surfaceY) {
-								water.updateBounceSwim(newXRelToOther, newYRelToOther - ballDiameter, this);
+							if (newYRelToOther - ballRadius < water.surfaceY) {
+								water.updateBounceSwim(newXRelToOther, newYRelToOther - ballRadius, this);
 							}
 							other = other.getNextNodeDescendToChildren(startNode);
 							break;
@@ -371,7 +387,7 @@ public final class BounceObject extends GameObject {
 							break;
 						case TrampolineObject.TYPEID: //jump pad
 							TrampolineObject jumpPad = (TrampolineObject) other;
-							if (aabbIntersectRay(
+							if (vectorIntersectLine(
 									LP32.Int32ToLP32(-70),
 									LP32.Int32ToLP32(95),
 									LP32.Int32ToLP32(140),
@@ -452,6 +468,7 @@ public final class BounceObject extends GameObject {
 					other = other.getNextNodeDescendToChildren(startNode);
 				}
 			}
+			System.out.println("[" + System.currentTimeMillis() + "] found " + this.collPointCount + " collision points");
 			if (this.collPointCount != 0) {
 				long nearestDistance = Long.MAX_VALUE;
 				int nearestCollIdx = -1;
@@ -459,7 +476,7 @@ public final class BounceObject extends GameObject {
 					long distX = (long) (this.collPointsX[collIndex] - this.renderCalcMatrix.translationX);
 					long distY = (long) (this.collPointsY[collIndex] - this.renderCalcMatrix.translationY);
 					long distance = (distX * distX) + (distY * distY);
-					if (this.f41a[collIndex]) {
+					if (this.resultByCollpoint[collIndex]) {
 						distance = -distance;
 					}
 					if (distance > 0x271000000000L) {
@@ -473,13 +490,13 @@ public final class BounceObject extends GameObject {
 					float f3 = 1000.0f / ((float) GameRuntime.updateDelta);
 					float f4 = ((float) this.collPointsX[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
 					float f5 = ((float) this.collPointsY[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
-					float f6 = ((float) this.f65l[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
-					float f7 = ((float) this.f66m[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
+					float f6 = ((float) this.pushVectorX[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
+					float f7 = ((float) this.pushVectorY[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
 					float sqrt2 = 1.0f / ((float) Math.sqrt((double) ((f6 * f6) + (f7 * f7))));
 					float xslope = sqrt2 * f6;
 					float yslope = sqrt2 * f7;
-					float f10 = ((float) this.f68n[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
-					float f11 = ((float) this.f70o[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
+					float f10 = ((float) this.deltaCollPointsX[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
+					float f11 = ((float) this.deltaCollPointsY[nearestCollIdx]) * LP32_TO_FP32_MULTIPLIER;
 					float f12 = (f10 * xslope) + (f11 * yslope);
 					float f13 = f12 * xslope;
 					float f14 = f12 * yslope;
@@ -547,6 +564,7 @@ public final class BounceObject extends GameObject {
 			//since this is done both in coll check and physics update, it's actually 1/8th of a second instead of 1/4th
 			this.isGrounded = false;
 		}
+		System.out.println();
 	}
 
 	/* renamed from: a */
@@ -554,7 +572,7 @@ public final class BounceObject extends GameObject {
 		if (t > 0) {
 			this.collPointsX[this.collPointCount] = this.renderCalcMatrix.translationX + ((int) ((((long) x) * ((long) t)) >> 16));
 			this.collPointsY[this.collPointCount] = this.renderCalcMatrix.translationY + ((int) ((((long) y) * ((long) t)) >> 16));
-			this.f41a[this.collPointCount] = z;
+			this.resultByCollpoint[this.collPointCount] = z;
 			geometry.renderCalcMatrix.mulDirection(x2, y2);
 			int i6 = Matrix.vectorMulRslX;
 			int i7 = Matrix.vectorMulRslY;
@@ -562,18 +580,18 @@ public final class BounceObject extends GameObject {
 			GameObject.tmpObjMatrix.mulDirection(x2, y2);
 			int i8 = Matrix.vectorMulRslX;
 			int i9 = Matrix.vectorMulRslY;
-			this.f65l[this.collPointCount] = (int) (((((long) i6) * ((long) (LP32.ONE - t))) + (((long) i8) * ((long) t))) >> 16);
-			this.f66m[this.collPointCount] = (int) (((((long) i7) * ((long) (LP32.ONE - t))) + (((long) i9) * ((long) t))) >> 16);
+			this.pushVectorX[this.collPointCount] = (int) (((((long) i6) * ((long) (LP32.ONE - t))) + (((long) i8) * ((long) t))) >> 16);
+			this.pushVectorY[this.collPointCount] = (int) (((((long) i7) * ((long) (LP32.ONE - t))) + (((long) i9) * ((long) t))) >> 16);
 		} else if (t < 0) {
 			throw new IllegalStateException("t < 0, t: " + t);
 		} else {
 			geometry.renderCalcMatrix.mulVector(aabbRayX, aabbRayY);
 			this.collPointsX[this.collPointCount] = Matrix.vectorMulRslX;
 			this.collPointsY[this.collPointCount] = Matrix.vectorMulRslY;
-			this.f41a[this.collPointCount] = z;
+			this.resultByCollpoint[this.collPointCount] = z;
 			geometry.renderCalcMatrix.mulVector(x2, y2);
-			this.f65l[this.collPointCount] = Matrix.vectorMulRslX;
-			this.f66m[this.collPointCount] = Matrix.vectorMulRslY;
+			this.pushVectorX[this.collPointCount] = Matrix.vectorMulRslX;
+			this.pushVectorY[this.collPointCount] = Matrix.vectorMulRslY;
 		}
 		geometry.renderCalcMatrix.mulVector(aabbRayX, aabbRayY);
 		int i10 = Matrix.vectorMulRslX;
@@ -581,8 +599,8 @@ public final class BounceObject extends GameObject {
 		geometry.loadObjectMatrixToTarget(GameObject.tmpObjMatrix);
 		GameObject.tmpObjMatrix.mulVector(aabbRayX, aabbRayY);
 		int i12 = (int) ((float) GameRuntime.updateDelta * 6553.6f);
-		this.f68n[this.collPointCount] = (Matrix.vectorMulRslX - i10) + (i12 * 0);
-		this.f70o[this.collPointCount] = (Matrix.vectorMulRslY - i11) + (i12 * 0);
+		this.deltaCollPointsX[this.collPointCount] = (Matrix.vectorMulRslX - i10) + (i12 * 0);
+		this.deltaCollPointsY[this.collPointCount] = (Matrix.vectorMulRslY - i11) + (i12 * 0);
 		this.collPointCount++;
 		if (geometry.event > -1) {
 			System.out.println("Geometry " + getObjectId() + " started event " + geometry.event);
@@ -590,51 +608,56 @@ public final class BounceObject extends GameObject {
 		}
 	}
 
-	private static boolean aabbIntersectRay(int minX, int minY, int width, int height, int rayx1, int rayy1, int rayx2, int rayy2, int epsilon) {
-		long l2 = (long) rayx1 * (long) height >> 16;
-		long l3 = (long) rayy1 * (long) width >> 16;
-		long l4 = (long) rayx2 * (long) height >> 16;
-		long l5 = (long) rayy2 * (long) width >> 16;
-		long l6 = l2 - l3 - l4 + l5;
-		if (l6 == 0L) {
+	private static boolean vectorIntersectLine(int originX, int originY, int vectorX, int vectorY, int lineX1, int lineY1, int lineX2, int lineY2, int leewaySquared) {
+		long l2 = (long) lineX1 * (long) vectorY >> 16;
+		long l3 = (long) lineY1 * (long) vectorX >> 16;
+		long l4 = (long) lineX2 * (long) vectorY >> 16;
+		long l5 = (long) lineY2 * (long) vectorX >> 16;
+		long crossProductVectorLine = l2 - l3 - l4 + l5;
+		if (crossProductVectorLine == 0L) { // parallel
 			return false;
 		}
-		long l7 = (l2 - l3 + ((long) width * (long) minY >> 16) - ((long) height * (long) minX >> 16) << 16) / l6;
-		if (l7 < 0L || l7 > LP32.ONE) {
+		long whereVectorIntersectsLine = (l2 - l3 + ((long) vectorX * (long) originY >> 16) - ((long) vectorY * (long) originX >> 16) << 16) / crossProductVectorLine;
+		if (whereVectorIntersectsLine < 0L || whereVectorIntersectsLine > LP32.ONE) {
 			return false;
 		}
-		long weight = ((long) rayx1 * (long) (rayy2 - minY) + (long) rayy1 * (long) (minX - rayx2) + (long) rayx2 * (long) minY - (long) rayy2 * (long) minX) / l6;
-		if (weight >= 0L && weight <= LP32.ONE) {
-			aabbRayWeight = (int) weight;
-			aabbRayX = (int) ((long) minX + (weight * (long) width >> 16));
-			aabbRayY = (int) ((long) minY + (weight * (long) height >> 16));
+		long whereLineIntersectsVector = ((long) lineX1 * (long) (lineY2 - originY) + (long) lineY1 * (long) (originX - lineX2) + (long) lineX2 * (long) originY - (long) lineY2 * (long) originX) / crossProductVectorLine;
+		if (whereLineIntersectsVector >= 0L && whereLineIntersectsVector <= LP32.ONE) { // intersects within the line segment
+			// proportionally to the movement vector, weight is where the line crosses
+			aabbRayWeight = (int) whereLineIntersectsVector;
+			aabbRayX = (int) ((long) originX + (whereLineIntersectsVector * (long) vectorX >> 16));
+			aabbRayY = (int) ((long) originY + (whereLineIntersectsVector * (long) vectorY >> 16));
 			aabbRayResult = false;
 			return true;
 		}
-		if (weight < 0L) {
-			long l9 = minX - rayx1;
-			long l10 = rayx2 - rayx1;
-			long l11 = minY - rayy1;
-			long l12 = rayy2 - rayy1;
-			long l13 = l9 * l10 + l11 * l12 >> 16;
-			if (l13 <= 0L) {
+		if (whereLineIntersectsVector < 0L) {
+			// line behind the ray origin
+			
+			// check if ray origin is within line based on the normal vector
+			long dxFirstpointOrigin = originX - lineX1;
+			long lineX = lineX2 - lineX1;
+			long dyFirstpointOrigin = originY - lineY1;
+			long lineY = lineY2 - lineY1;
+			long firstpointOriginDotLine = dxFirstpointOrigin * lineX + dyFirstpointOrigin * lineY >> 16;
+			if (firstpointOriginDotLine <= 0L) {
 				return false;
 			}
-			long l14 = l10 * l10 + l12 * l12 >> 16;
-			if (l13 >= l14) {
+			long lineLengthSquared = lineX * lineX + lineY * lineY >> 16;
+			if (firstpointOriginDotLine >= lineLengthSquared) {
 				return false;
 			}
-			long l15 = (long) rayx1 + ((l13 = (l13 << 16) / l14) * l10 >> 16);
-			long l16 = l15 - (long) minX;
-			long l17 = (long) rayy1 + (l13 * l12 >> 16);
-			long l18 = l17 - (long) minY;
-			long l19 = l16 * l16 + l18 * l18 >> 16;
-			if (l19 > (long) epsilon) {
+
+			long projectedX = (long) lineX1 + ((firstpointOriginDotLine = (firstpointOriginDotLine << 16) / lineLengthSquared) * lineX >> 16);
+			long deltaProjectedX = projectedX - (long) originX;
+			long projectedY = (long) lineY1 + (firstpointOriginDotLine * lineY >> 16);
+			long deltaProjectedY = projectedY - (long) originY;
+			long distanceFromProjected = deltaProjectedX * deltaProjectedX + deltaProjectedY * deltaProjectedY >> 16;
+			if (distanceFromProjected > (long) leewaySquared) {
 				return false;
 			}
 			aabbRayWeight = 0;
-			aabbRayX = (int) l15;
-			aabbRayY = (int) l17;
+			aabbRayX = (int) projectedX;
+			aabbRayY = (int) projectedY;
 			aabbRayResult = true;
 			return true;
 		}
@@ -642,39 +665,39 @@ public final class BounceObject extends GameObject {
 	}
 
 	/* renamed from: c */
-	private static boolean m9c(int i, int i2, int i3, int i4, int i5, int i6, int i7, int i8) {
-		long j = (long) (i - i6);
-		long j2 = (long) (i2 - i7);
-		long j3 = ((((long) i3) * j) + (((long) i4) * j2)) >> 16;
-		if (j3 >= 0) {
+	private static boolean finiteRayIntersectsCircle(int rayOriginX, int rayOriginY, int rayCos, int raySin, int rayLength, int circleCenterX, int circleCenterY, int circleRadius) {
+		long dxCircleOrigin = (long) (rayOriginX - circleCenterX);
+		long dyCircleOrigin = (long) (rayOriginY - circleCenterY);
+		long dotProduct = ((((long) rayCos) * dxCircleOrigin) + (((long) raySin) * dyCircleOrigin)) >> 16;
+		if (dotProduct >= 0) {
 			return false;
 		}
-		long j4 = (((j * j) + (j2 * j2)) >> 16) - ((long) ((i8 * i8) << 16));
-		if (j4 <= 0) {
+		long distanceOriginTangentSquared = (((dxCircleOrigin * dxCircleOrigin) + (dyCircleOrigin * dyCircleOrigin)) >> 16) - ((long) ((circleRadius * circleRadius) << 16));
+		if (distanceOriginTangentSquared <= 0) { // ray origin is inside the circle
 			aabbRayWeight = 0;
-			int sqrt = (int) Math.sqrt((double) ((j * j) + (j2 * j2)));
-			int i9 = 0;
-			int i10 = 0;
-			if (sqrt != 0) {
-				i9 = (int) (((((long) i8) * j) << 16) / ((long) sqrt));
-				i10 = (int) (((((long) i8) * j2) << 16) / ((long) sqrt));
+			int distanceRayCircle = (int) Math.sqrt((double) ((dxCircleOrigin * dxCircleOrigin) + (dyCircleOrigin * dyCircleOrigin)));
+			int deltaProjectedX = 0;
+			int deltaProjectedY = 0;
+			if (distanceRayCircle != 0) {
+				deltaProjectedX = (int) (((((long) circleRadius) * dxCircleOrigin) << 16) / ((long) distanceRayCircle));
+				deltaProjectedY = (int) (((((long) circleRadius) * dyCircleOrigin) << 16) / ((long) distanceRayCircle));
 			}
-			aabbRayX = i9 + i6;
-			aabbRayY = i10 + i7;
+			aabbRayX = deltaProjectedX + circleCenterX;
+			aabbRayY = deltaProjectedY + circleCenterY;
 			aabbRayResult = true;
 			return true;
 		}
-		long j5 = ((j3 * j3) >> 16) - j4;
-		if (j5 < 0) {
+		long radiusSquaredMinusDistanceRayFromCenterSquared = ((dotProduct * dotProduct) >> 16) - distanceOriginTangentSquared;
+		if (radiusSquaredMinusDistanceRayFromCenterSquared < 0) {
 			return false;
 		}
-		long sqrt2 = (-j3) - ((long) ((int) Math.sqrt((double) (j5 << 16))));
-		if (sqrt2 > ((long) i5)) {
+		long distanceOriginToCircle = (-dotProduct) - ((long) ((int) Math.sqrt((double) (radiusSquaredMinusDistanceRayFromCenterSquared << 16))));
+		if (distanceOriginToCircle > ((long) rayLength)) {
 			return false;
 		}
-		aabbRayWeight = (int) ((sqrt2 << 16) / ((long) i5));
-		aabbRayX = (int) (((long) i) + ((((long) i3) * sqrt2) >> 16));
-		aabbRayY = (int) (((sqrt2 * ((long) i4)) >> 16) + ((long) i2));
+		aabbRayWeight = (int) ((distanceOriginToCircle << 16) / ((long) rayLength));
+		aabbRayX = (int) (((long) rayOriginX) + ((((long) rayCos) * distanceOriginToCircle) >> 16));
+		aabbRayY = (int) (((distanceOriginToCircle * ((long) raySin)) >> 16) + ((long) rayOriginY));
 		aabbRayResult = false;
 		return true;
 	}
