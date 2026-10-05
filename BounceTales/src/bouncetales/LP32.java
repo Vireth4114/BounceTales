@@ -10,12 +10,6 @@ public class LP32 {
 	public static float LP32ToFP32(int lp32) {
 		return lp32 / LP32_SCALE;
 	}
-	
-	public static String LP32ToString(int lp32) {
-		int intPart = lp32 >> 16;
-		int fracPart = lp32 & 0xFFFF;
-		return intPart + "+" + fracPart + "/65536";
-	}
 
 	public static int FP32ToLP32(float fp32) {
 		return (int) (fp32 * LP32_SCALE);

@@ -107,6 +107,6 @@ public final class Matrix {
 	}
 
 	public String toString() {
-		return LP32.LP32ToFP32(m00) + " " + LP32.LP32ToFP32(m01) + " " + LP32.LP32ToFP32(translationX) + "\n" + LP32.LP32ToFP32(m10) + " " + LP32.LP32ToFP32(m11) + " " + LP32.LP32ToFP32(translationY);
+		return m00 + " " + m01 + " " + translationX + "\n" + m10 + " " + m11 + " " + translationY;
 	}
 }
